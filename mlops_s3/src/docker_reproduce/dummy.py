@@ -2,20 +2,17 @@ import matplotlib.pyplot as plt
 import torch
 import typer
 import wandb
-from data import corrupt_mnist
-from model import MyAwesomeModel
+from my_project.data import corrupt_mnist
+from my_project.model import MyAwesomeModel
 from sklearn.metrics import RocCurveDisplay
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-print("The selected device is:", DEVICE)
 
-
-def train(lr: float = 1e-3, batch_size: int = 32, epochs: int = 5) -> None:
+def train(lr: float = 0.001, batch_size: int = 32, epochs: int = 5) -> None:
     """Train a model on MNIST."""
     print("Training day and night")
     print(f"{lr=}, {batch_size=}, {epochs=}")
-
     wandb.init(
         project="corrupt_mnist",
         config={"lr": lr, "batch_size": batch_size, "epochs": epochs},
@@ -29,7 +26,6 @@ def train(lr: float = 1e-3, batch_size: int = 32, epochs: int = 5) -> None:
     loss_fn = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    statistics = {"train_loss": [], "train_accuracy": []}
     for epoch in range(epochs):
         model.train()
 
@@ -41,11 +37,7 @@ def train(lr: float = 1e-3, batch_size: int = 32, epochs: int = 5) -> None:
             loss = loss_fn(y_pred, target)
             loss.backward()
             optimizer.step()
-            statistics["train_loss"].append(loss.item())
-
             accuracy = (y_pred.argmax(dim=1) == target).float().mean().item()
-            statistics["train_accuracy"].append(accuracy)
-
             wandb.log({"train_loss": loss.item(), "train_accuracy": accuracy})
 
             preds.append(y_pred.detach().cpu())
@@ -60,8 +52,8 @@ def train(lr: float = 1e-3, batch_size: int = 32, epochs: int = 5) -> None:
 
                 # add a plot of histogram of the gradients
                 grads = torch.cat([p.grad.flatten() for p in model.parameters() if p.grad is not None], 0)
-                wandb.log({"gradients": wandb.Histogram(grads.cpu())})
-            
+                wandb.log({"gradients": wandb.Histogram(grads)})
+
         # add a custom matplotlib plot of the ROC curves
         preds = torch.cat(preds, 0)
         targets = torch.cat(targets, 0)
@@ -70,25 +62,15 @@ def train(lr: float = 1e-3, batch_size: int = 32, epochs: int = 5) -> None:
             one_hot = torch.zeros_like(targets)
             one_hot[targets == class_id] = 1
             _ = RocCurveDisplay.from_predictions(
-                one_hot.cpu().numpy(),
-                preds[:, class_id].cpu().numpy(),
+                one_hot,
+                preds[:, class_id],
                 name=f"ROC curve for {class_id}",
                 plot_chance_level=(class_id == 2),
             )
 
         # alternatively use wandb.log({"roc": wandb.Image(plt)}
-        #wandb.plot({"roc": plt})
-        wandb.log({"roc": wandb.Image(plt)})
+        wandb.plot({"roc": plt})
         plt.close()  # close the plot to avoid memory leaks and overlapping figures
-
-    print("Training complete")
-    torch.save(model.state_dict(), "models/model.pth")
-    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
-    axs[0].plot(statistics["train_loss"])
-    axs[0].set_title("Train loss")
-    axs[1].plot(statistics["train_accuracy"])
-    axs[1].set_title("Train accuracy")
-    fig.savefig("reports/figures/training_statistics.png")
 
 
 if __name__ == "__main__":
