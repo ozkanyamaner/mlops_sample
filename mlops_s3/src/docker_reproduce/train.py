@@ -4,7 +4,7 @@ import typer
 import wandb
 from data import corrupt_mnist
 from model import MyAwesomeModel
-from sklearn.metrics import RocCurveDisplay
+from sklearn.metrics import RocCurveDisplay, accuracy_score, f1_score, precision_score, recall_score
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
@@ -16,7 +16,7 @@ def train(lr: float = 1e-3, batch_size: int = 32, epochs: int = 5) -> None:
     print("Training day and night")
     print(f"{lr=}, {batch_size=}, {epochs=}")
 
-    wandb.init(
+    run = wandb.init(
         project="corrupt_mnist",
         config={"lr": lr, "batch_size": batch_size, "epochs": epochs},
     )
@@ -81,8 +81,24 @@ def train(lr: float = 1e-3, batch_size: int = 32, epochs: int = 5) -> None:
         wandb.log({"roc": wandb.Image(plt)})
         plt.close()  # close the plot to avoid memory leaks and overlapping figures
 
+    final_accuracy = accuracy_score(targets, preds.argmax(dim=1))
+    final_precision = precision_score(targets, preds.argmax(dim=1), average="weighted")
+    final_recall = recall_score(targets, preds.argmax(dim=1), average="weighted")
+    final_f1 = f1_score(targets, preds.argmax(dim=1), average="weighted")
+
     print("Training complete")
     torch.save(model.state_dict(), "models/model.pth")
+
+    artifact = wandb.Artifact(
+        name="corrupt_mnist_model",
+        type="model",
+        description="A model trained to classify corrupt MNIST images",
+        metadata={"accuracy": final_accuracy, "precision": final_precision, "recall": final_recall, "f1": final_f1},
+    )
+    artifact.add_file("models/model.pth")
+    run.log_artifact(artifact)
+
+
     fig, axs = plt.subplots(1, 2, figsize=(15, 5))
     axs[0].plot(statistics["train_loss"])
     axs[0].set_title("Train loss")
