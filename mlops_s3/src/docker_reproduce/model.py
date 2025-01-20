@@ -1,29 +1,32 @@
 import torch
 from torch import nn
-
+import timm
 
 class MyAwesomeModel(nn.Module):
     """My awesome model."""
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.conv1 = nn.Conv2d(1, 32, 3, 1)
-        self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        self.conv3 = nn.Conv2d(64, 128, 3, 1)
-        self.dropout = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(128, 10)
+    def __init__(self, num_classes = 53) -> None:
+        super(MyAwesomeModel, self).__init__()
+        self.model = timm.create_model('resnet18', pretrained=True, num_classes=num_classes)
+
+        # Freeze earlier layers (layer1 and layer2)
+        for param in self.model.layer1.parameters():
+            param.requires_grad = False
+        for param in self.model.layer2.parameters():
+            param.requires_grad = False
+
+        # Fine-tune layer3, layer4, and fc layer
+        for param in self.model.layer3.parameters():
+            param.requires_grad = True
+        for param in self.model.layer4.parameters():
+            param.requires_grad = True
+
+        # Change the number of output classes
+        self.model.fc = nn.Linear(self.model.fc.in_features, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
-        x = torch.relu(self.conv1(x))
-        x = torch.max_pool2d(x, 2, 2)
-        x = torch.relu(self.conv2(x))
-        x = torch.max_pool2d(x, 2, 2)
-        x = torch.relu(self.conv3(x))
-        x = torch.max_pool2d(x, 2, 2)
-        x = torch.flatten(x, 1)
-        x = self.dropout(x)
-        return self.fc1(x)
+        return self.model(x)
 
 
 if __name__ == "__main__":
