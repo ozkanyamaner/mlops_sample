@@ -2,9 +2,14 @@ import matplotlib.pyplot as plt
 import torch
 import typer
 import wandb
+import sys
+
 from data import corrupt_mnist
 from model import MyAwesomeModel
 from sklearn.metrics import RocCurveDisplay, accuracy_score, f1_score, precision_score, recall_score
+
+# Replace underscores with dashes in CLI arguments
+sys.argv = [arg.replace("_", "-") if "--" in arg else arg for arg in sys.argv]
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
